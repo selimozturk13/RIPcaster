@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-
+import sys
+import tomllib
 
 class Memory:
-    def __init__(self,size,cpu: Cpu):
+    def __init__(self,size,cpu):
         self.memory=bytearray(size)
         self.size=size
         self.sp=size
@@ -30,7 +31,7 @@ class Memory:
             self.cpu.registers[rax]=self.hp
 
 class Cpu:
-    def __init__(self,instructionPointer,memory: Memory):
+    def __init__(self,instructionPointer,memory):
         self.instructionPointer=instructionPointer
         self.memory=memory
         self.registers={
@@ -49,40 +50,116 @@ class Cpu:
 #           registerid=registerid.replace('[','').replace(']','')
 
     def set_register_value(self,registerid,value):
-        if registerid in self.registers:
+        if str(registerid) in self.registers:
             self.registers[registerid]=value
-        elif '[' in registerid and ']' in registerid:
+        elif '[' in str(registerid) and ']' in str(registerid):
             registerid=registerid.replace('[','').replace(']','')
             self.memory.memory[registerid]=value
     
     def get_register_value(self,registerid):
-        if registerid in self.registers:
+        if str(registerid) in self.registers:
             try:
-                return value=self.registers[registerid]
+                return self.registers[registerid]
             except:
                 return None
-        elif '[' in registerid and ']' in registerid:
+        elif '[' in str(registerid) and ']' in str(registerid):
             registerid=registerid.replace('[','').replace(']','')
-            return value=self.memory.memory[registerid]
+            return self.memory.memory[registerid]
         else:
             return registerid
 
     def ALU_Unit(self,operation,arg1,arg2):
-        if arg1 in self.registers or arg2 in self.registers or ('[' in arg2 and ']'in arg2):
+        if str(arg1) in self.registers or str(arg2) in self.registers or ('[' in str(arg2) and ']'in str(arg2)):
+            
             match operation:
                 case '+':
-                    set_register_value(arg2,get_register_value(arg1)+get_register_value(arg2))
+                    self.set_register_value(arg1,int(self.get_register_value(arg1))+int(self.get_register_value(arg2)))
                 case '-':
-                    set_register_value(arg2,get_register_value(arg1)-get_register_value(arg2))
+                    self.set_register_value(arg1,int(self.get_register_value(arg1))-int(self.get_register_value(arg2)))
                 case '*':
-                    set_register_value(arg2,get_register_value(arg1)*get_register_value(arg2))
+                    self.set_register_value(arg2,int(self.get_register_value(arg1))*int(self.get_register_value(arg2)))
                 case '/':
-                    set_register_value(arg2,get_register_value(arg1)/get_register_value(arg2))
+                    self.set_register_value(arg2,int(self.get_register_value(arg1))/int(self.get_register_value(arg2)))
                 case 'or':
-                    set_register_value(arg2,get_register_value(arg1)|get_register_value(arg2))
+                    self.set_register_value(arg1,int(self.get_register_value(arg1))|int(self.get_register_value(arg2)))
                 case 'and':
-                    set_register_value(arg2,get_register_value(arg1)&get_register_value(arg2))
+                    self.set_register_value(arg1,int(self.get_register_value(arg1))&int(self.get_register_value(arg2)))
                 case 'xor':
-                    set_register_value(arg2,get_register_value(arg1)^get_register_value(arg2))
+                    self.set_register_value(arg2,int(self.get_register_value(arg1),base=2)^int(self.get_register_value(arg2),base=2))
         
+
+class mem:
+    def __init__(self,a):
+        self.a=a
+
+try:
+    with open("config.toml","rb") as f:
+        config_data=tomllib.load(f)
+except OSError as err:
+    print(f"open: {err.strerror}",file=sys.stderr)
+    sys.exit(-1)
+ram_size=config_data["hardware"]["ram_size"]
+asmfile=config_data["files"]["asmfile"]
+a=mem(1)
+cpu=Cpu(0,a)
+memory=Memory(ram_size,cpu)
+cpu.memory=memory
+
+try:
+    with open(asmfile,"r") as f:
+        asmdata=f.read()
+except OSError as err:
+    print(f"open: {err.strerror}",file=sys.stderr)
+    sys.exit(-1)
+asmlines=asmdata.split("\n")
+instructions=[]
+
+for line in asmlines:
+    line=line.replace(",","")
+    instructions.append(line)
+
+while instructions[cpu.instructionPointer]!="halt":
+    instruction_line=instructions[cpu.instructionPointer]
+    instruction_parts=instruction_line.split()
+    instruction=instruction_parts[0]
+    arg1=instruction_parts[1] if len(instruction_parts)>1 else None
+    arg2=instruction_parts[2] if len(instruction_parts)>2 else None
+    
+    match instruction:
+        case "ADD":
+            cpu.ALU_Unit("+",arg1,arg2)   
+        case "SUB":
+            cpu.ALU_Unit("-",arg1,arg2)
+        case "MUL":
+            cpu.ALU_Unit("*",arg1,"rax")
+        case "DIV":
+            cpu.ALU_Unit("/",arg1,"rax")
+        case "AND":
+            cpu.ALU_Unit("and",arg1,arg2)
+        case "OR":
+            cpu.ALU_Unit("or",arg1,arg2)
+        case "XOR":
+            cpu.ALU_Unit("xor",arg1,arg2)
+        case "MOV":
+            cpu.set_register_value(arg1,cpu.get_register_value(arg2))
+        case "INC":
+            cpu.set_register_value(arg1,(int(cpu.get_register_value(arg1))+1))
+        case "DEC":
+            cpu.set_register_value(arg1,(int(cpu.get_register_value(arg1))-1))
+        case "syscall":  
+            match int(cpu.get_register_value("rax")):
+                case 1:
+                    rdi=int(cpu.get_register_value("rdi"))
+                    if rdi==1:
+                        if int(cpu.get_register_value("rdx"))==len(str(cpu.get_register_value("rsi"))):
+                            print(cpu.get_register_value("rsi"))
+                    elif rdi==2:
+                        print("stderr")
+                        if int(cpu.get_register_value("rdx"))==len(str(cpu.get_register_value("rsi"))):
+                            print(f"{cpu.get_register_value("rsi")}",file=sys.stderr)
+
+    cpu.instructionPointer+=1   
+
+
+
 

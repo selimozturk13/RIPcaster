@@ -1,0 +1,7 @@
+[hardware]
+
+ram_size=32
+
+[files]
+
+asmfile="asmfile.asm"
