@@ -1,3 +1,6 @@
+section .data
+global _start
+_start:
 MOV rax, 10
 MOV rbx, 10
 MUL rbx

@@ -12,15 +12,14 @@ class Memory:
         self.cpu=cpu
 
     def stack_push(self,data: bytes):
-        lent=len(data)
-        self.sp-=lent
-        self.memory[self.sp:self.sp+n]=data
-        self.cpu.registers[rsp]=self.sp
+        self.sp-=8
+        self.memory[self.sp:self.sp-8]=data
+        self.cpu.registers["rsp"]=self.sp
 
-    def stack_pop(self,n: int):
-        data=memory[self.sp:self.sp+n]
-        self.sp+=n
-        self.cpu.registers[rsp]=self.sp
+    def stack_pop(self):
+        data=memory[self.sp:self.sp+8]
+        self.sp+=8
+        self.cpu.registers["rsp"]=self.sp
         return data
 
     def write_to_heap(self,rax,rdi):
@@ -29,6 +28,11 @@ class Memory:
         else:
             self.hp+=rdi
             self.cpu.registers[rax]=self.hp
+    def get_memory(self,addr):
+        try:
+            return self.memory[addr]
+        except:
+            print(f"RIP: {self.cpu.instructionPointer}",file=sys.stderr)
 
 class Cpu:
     def __init__(self,instructionPointer,memory):
@@ -55,6 +59,8 @@ class Cpu:
         elif '[' in str(registerid) and ']' in str(registerid):
             registerid=registerid.replace('[','').replace(']','')
             self.memory.memory[registerid]=value
+        elif '\'' in registerid and '\'' in registerid:
+            self.memory.memory[registerid]=ord(value)
     
     def get_register_value(self,registerid):
         if str(registerid) in self.registers:
@@ -100,10 +106,6 @@ except OSError as err:
     sys.exit(-1)
 ram_size=config_data["hardware"]["ram_size"]
 asmfile=config_data["files"]["asmfile"]
-a=mem(1)
-cpu=Cpu(0,a)
-memory=Memory(ram_size,cpu)
-cpu.memory=memory
 
 try:
     with open(asmfile,"r") as f:
@@ -113,10 +115,20 @@ except OSError as err:
     sys.exit(-1)
 asmlines=asmdata.split("\n")
 instructions=[]
-
+i=0
 for line in asmlines:
     line=line.replace(",","")
     instructions.append(line)
+    if line=="_start:":
+        inspoint=i
+    i+=1
+
+a=mem(1)
+cpu=Cpu(inspoint,a)
+memory=Memory(ram_size,cpu)
+cpu.memory=memory
+
+
 
 while instructions[cpu.instructionPointer]!="halt":
     instruction_line=instructions[cpu.instructionPointer]
@@ -147,19 +159,26 @@ while instructions[cpu.instructionPointer]!="halt":
         case "DEC":
             cpu.set_register_value(arg1,(int(cpu.get_register_value(arg1))-1))
         case "syscall":  
-            match int(cpu.get_register_value("rax")):
-                case 1:
-                    rdi=int(cpu.get_register_value("rdi"))
+            match ord(cpu.get_register_value("rax")):
+                case 0x2000004:
+                    rdi=ord(cpu.get_register_value("rdi"))
                     if rdi==1:
-                        if int(cpu.get_register_value("rdx"))==len(str(cpu.get_register_value("rsi"))):
-                            print(cpu.get_register_value("rsi"))
+                        i=0
+                        while(i<cpu.get_register_value("rdx")):
+                            try:
+                                print(chr(memory.get_memory(cpu.get_register_value("rax")+i)))
+                                rdx+=1
+                            except:
+                                print(f"RIP: {cpu.instructionPointer}",file=sys.stderr)
                     elif rdi==2:
-                        print("stderr")
-                        if int(cpu.get_register_value("rdx"))==len(str(cpu.get_register_value("rsi"))):
-                            print(f"{cpu.get_register_value("rsi")}",file=sys.stderr)
+                        try:
+                            i=0
+                            while(i<cpu.get_register_value("rdx")):
+                                print(chr(memory.get_memory(cpu.get_register_value("rax")+i)),file=sys.stderr)
+                                rdx+=1
+                        except:
+                            print(f"RIP: {cpu.instructionPointer}",file=sys.stderr)
+                case 0x2000001:
+                    sys.exit(cpu.get_register_value("rdi"))
 
     cpu.instructionPointer+=1   
-
-
-
-
