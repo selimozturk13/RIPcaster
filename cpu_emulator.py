@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import sys
 import tomllib
+import os
+
 
 class Memory:
     def __init__(self,size,cpu):
+        self.datasection={}
         self.memory=bytearray(size)
         self.size=size
         self.sp=size
@@ -11,28 +14,57 @@ class Memory:
         self.heapBlocks={}
         self.cpu=cpu
 
-    def stack_push(self,data: bytes):
-        self.sp-=8
-        self.memory[self.sp:self.sp-8]=data
-        self.cpu.registers["rsp"]=self.sp
+    def stack_push(self, data):
+        if isinstance(data, int):
+            data = data.to_bytes(8, byteorder='little', signed=True)
+        elif isinstance(data, str):
+            data = data.encode('utf-8')
+        elif not isinstance(data, (bytes, bytearray)):
+            raise TypeError(f"Unsupported type pushed to stack: {type(data)}")
+
+        self.sp -= len(data)
+        self.memory[self.sp:self.sp + len(data)] = data
+        self.cpu.registers["rsp"] = self.sp
 
     def stack_pop(self):
-        data=memory[self.sp:self.sp+8]
-        self.sp+=8
-        self.cpu.registers["rsp"]=self.sp
-        return data
+        data = self.memory[self.sp:self.sp + 8]
+        self.sp += 8
+        self.cpu.registers["rsp"] = self.sp
+        return int.from_bytes(data, byteorder='little', signed=True)
 
     def write_to_heap(self,rax,rdi):
+        rdi=self.cpu.get_register_value(rdi)
         if rdi<0:
             return None
         else:
             self.hp+=rdi
             self.cpu.registers[rax]=self.hp
     def get_memory(self,addr):
+        if isinstance(addr, str):
+            try:
+                addr = int(addr, 0)
+            except:
+                data = self.datasection.get(addr)
+                if data:
+                    addr = data[0]
+                else:
+                    raise ValueError(f"Unknown label {addr}")
+        return self.memory[addr]
+    def add_data_to_data_section(self,name,data,size):
         try:
-            return self.memory[addr]
-        except:
-            print(f"RIP: {self.cpu.instructionPointer}",file=sys.stderr)
+            if not self.datasection:
+                pointer = 0
+            else:
+                pointer = list(self.datasection.values())[-1][0] + list(self.datasection.values())[-1][1]
+            lent = size
+            if isinstance(data, str):
+                data = data.encode('utf-8')
+            self.memory[pointer:pointer+lent] = data
+            self.datasection[name] = [pointer, lent]
+        except Exception as e:
+            print("Data adding error:", e)
+    def get_data_from_data_section(self,name):
+        return self.datasection.get(name)
 
 class Cpu:
     def __init__(self,instructionPointer,memory):
@@ -50,9 +82,6 @@ class Cpu:
         }
         self.zeroFlag=0
 
-#elif '[' in registerid and ']' in registerid:
-#           registerid=registerid.replace('[','').replace(']','')
-
     def set_register_value(self,registerid,value):
         if str(registerid) in self.registers:
             self.registers[registerid]=value
@@ -63,14 +92,52 @@ class Cpu:
             self.memory.memory[registerid]=ord(value)
     
     def get_register_value(self,registerid):
-        if str(registerid) in self.registers:
+        if isinstance(registerid, str) and registerid.isdigit():
+            val = int(registerid)
+            return val
+        elif str(registerid) in self.registers:
             try:
                 return self.registers[registerid]
+            except Exception as err:
+                print(f"RIP : {self.registers["rip"]}\n{err}")
+                sys.exit(-1)
+        elif '[' in str(registerid) and ']' in str(registerid) and '+' in str(registerid):
+            #relative addressing
+            registerid=registerid.replace('[','').replace(']','')
+            registerid=registerid.split('+')
+            try:
+                registerval=self.registers[registerid[0]]
             except:
-                return None
+                try:
+                    return self.memory.memory[int(registerid[0])+int(registerid[1])]
+                except Exception as err:
+                    print(f"RIP : {self.registers["rip"]}\n{err}")
+                    os._exit(-1)
+            else:
+                try:
+                    data=self.memory.get_data_from_data_section(registerid[1])
+                except:
+                    try:
+                        global instructions
+                        i=0
+                        for instruction in instructions:
+                            if instruction==registerid[1].replace(':',''):
+                                break
+                            i+=1
+                        offset=i-registerval
+                        return registerval+offset
+                    except Exception as err:
+                        print(f"RIP : {self.registers["rip"]}\n{err}")
+                        os._exit(-1)
+                else:
+                    offset=data[0]-self.registers["rip"]
+                    return self.registers["rip"]+data[0]
+
         elif '[' in str(registerid) and ']' in str(registerid):
             registerid=registerid.replace('[','').replace(']','')
             return self.memory.memory[registerid]
+        elif registerid in self.memory.datasection:
+            return self.memory.get_data_from_data_section(registerid)[0]
         else:
             return registerid
 
@@ -91,7 +158,7 @@ class Cpu:
                 case 'and':
                     self.set_register_value(arg1,int(self.get_register_value(arg1))&int(self.get_register_value(arg2)))
                 case 'xor':
-                    self.set_register_value(arg2,int(self.get_register_value(arg1),base=2)^int(self.get_register_value(arg2),base=2))
+                    self.set_register_value(arg2,int(self.get_register_value(arg1))^int(self.get_register_value(arg2)))
         
 
 class mem:
@@ -103,7 +170,7 @@ try:
         config_data=tomllib.load(f)
 except OSError as err:
     print(f"open: {err.strerror}",file=sys.stderr)
-    sys.exit(-1)
+    os._exit(-1)
 ram_size=config_data["hardware"]["ram_size"]
 asmfile=config_data["files"]["asmfile"]
 
@@ -112,73 +179,129 @@ try:
         asmdata=f.read()
 except OSError as err:
     print(f"open: {err.strerror}",file=sys.stderr)
-    sys.exit(-1)
-asmlines=asmdata.split("\n")
-instructions=[]
+    os._exit(-1)
+
+instructions=asmdata.split("\n")
 i=0
-for line in asmlines:
+for line in instructions:
     line=line.replace(",","")
-    instructions.append(line)
+    
     if line=="_start:":
         inspoint=i
+    if line=="section .data":
+        dataptr=i
     i+=1
+
 
 a=mem(1)
 cpu=Cpu(inspoint,a)
 memory=Memory(ram_size,cpu)
 cpu.memory=memory
 
+while True:
+    try:
+        dataline = instructions[dataptr].strip()
+        if dataline == "section .text":
+            break
+
+        if not dataline or dataline.startswith(";"):
+            dataptr += 1
+            continue
+
+        parts = dataline.split(None, 2)  
+        if len(parts) < 3:
+            dataptr += 1
+            continue
+
+        name, typeofvar, raw_data = parts
+        if typeofvar != "db":
+            dataptr += 1
+            continue
+
+        data = bytearray()
+
+        
+        tokens = [x.strip() for x in raw_data.split(",")]
+
+        for token in tokens:
+            if token.startswith('\"') and token.endswith('\"'):
+               
+                text = token.strip('"')
+                data.extend(text.encode('utf-8'))
+            elif token.isdigit():
+                data.append(int(token))
+            else:
+                raise ValueError(f"Unsupported db value: {token}")
+
+        memory.add_data_to_data_section(name, data, len(data))
+        dataptr += 1
+    except Exception as e:
+        print("DATA ERROR:", e)
+        break
 
 
-while instructions[cpu.instructionPointer]!="halt":
-    instruction_line=instructions[cpu.instructionPointer]
+while cpu.instructionPointer<len(instructions):
+    instruction_line=instructions[cpu.instructionPointer].replace(",","")
     instruction_parts=instruction_line.split()
-    instruction=instruction_parts[0]
-    arg1=instruction_parts[1] if len(instruction_parts)>1 else None
-    arg2=instruction_parts[2] if len(instruction_parts)>2 else None
+    instruction=instruction_parts[0].lower() if len(instruction_parts)>=1 else None
+    arg1=instruction_parts[1].lower() if len(instruction_parts)>1 else None
+    arg2=instruction_parts[2].lower() if len(instruction_parts)>2 else None
     
     match instruction:
-        case "ADD":
+     
+        case "add":
             cpu.ALU_Unit("+",arg1,arg2)   
-        case "SUB":
+        case "sub":
             cpu.ALU_Unit("-",arg1,arg2)
-        case "MUL":
+        case "mul":
             cpu.ALU_Unit("*",arg1,"rax")
-        case "DIV":
+        case "div":
             cpu.ALU_Unit("/",arg1,"rax")
-        case "AND":
+        case "and":
             cpu.ALU_Unit("and",arg1,arg2)
-        case "OR":
+        case "or":
             cpu.ALU_Unit("or",arg1,arg2)
-        case "XOR":
+        case "xor":
             cpu.ALU_Unit("xor",arg1,arg2)
-        case "MOV":
-            cpu.set_register_value(arg1,cpu.get_register_value(arg2))
-        case "INC":
+        case "mov":
+            val = cpu.get_register_value(arg2)
+            if isinstance(val, str) and val.isdigit():
+                val = int(val)
+            cpu.set_register_value(arg1, val)
+        case "inc":
             cpu.set_register_value(arg1,(int(cpu.get_register_value(arg1))+1))
-        case "DEC":
+        case "dec":
             cpu.set_register_value(arg1,(int(cpu.get_register_value(arg1))-1))
+        case "push":
+            memory.stack_push(cpu.get_register_value(arg1))
+        case "pop":
+            cpu.set_register_value(arg1,memory.stack_pop())
+        case "lea":
+            arg2 = arg2.replace("[","").replace("]","")
+            if arg2 in memory.datasection:
+                cpu.set_register_value(arg1, memory.get_data_from_data_section(arg2)[0])
+            else:
+                i = 0
+                for instruction314 in instructions:
+                    if instruction314 == arg2:
+                        break
+                    i += 1
+                cpu.set_register_value(arg1, i)                
         case "syscall":  
-            match ord(cpu.get_register_value("rax")):
-                case 0x2000004:
-                    rdi=ord(cpu.get_register_value("rdi"))
-                    if rdi==1:
-                        i=0
-                        while(i<cpu.get_register_value("rdx")):
-                            try:
-                                print(chr(memory.get_memory(cpu.get_register_value("rax")+i)))
-                                rdx+=1
-                            except:
-                                print(f"RIP: {cpu.instructionPointer}",file=sys.stderr)
-                    elif rdi==2:
-                        try:
-                            i=0
-                            while(i<cpu.get_register_value("rdx")):
-                                print(chr(memory.get_memory(cpu.get_register_value("rax")+i)),file=sys.stderr)
-                                rdx+=1
-                        except:
-                            print(f"RIP: {cpu.instructionPointer}",file=sys.stderr)
-                case 0x2000001:
-                    sys.exit(cpu.get_register_value("rdi"))
-
+            
+            rax= cpu.get_register_value("rax") if isinstance(cpu.get_register_value("rax"),int) else ord(cpu.get_register_value("rax"))
+            if rax == 1:
+                fd = cpu.get_register_value("rdi")
+                buf = cpu.get_register_value("rsi")
+                length = cpu.get_register_value("rdx")
+                if fd == 1:
+                    for i in range(length):
+                        sys.stdout.write(chr(memory.get_memory(buf + i)))
+                    sys.stdout.flush()
+                
+            if rax==60:
+                os._exit(cpu.get_register_value("rdi"))
+        case "halt":
+            break
     cpu.instructionPointer+=1   
+print("Registers", cpu.registers)

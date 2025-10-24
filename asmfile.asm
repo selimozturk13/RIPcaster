@@ -1,73 +1,39 @@
 section .data
-global _start
+    msg_hello db "Hello stack!", 10, 0
+    msg_stack  db "Stack test done", 10, 0
+    newline    db 10, 0
+
+section .text
 _start:
-MOV rax, 10
-MOV rbx, 10
-MUL rbx
-MOV rsi, rax
-MOV rax, 1
-MOV rdi, 1
-MOV rdx, 3
-syscall
-MOV rax, 10
-MOV rbx, 10
-ADD rax, rbx
-MOV rsi, rax
-MOV rax, 1
-MOV rdi, 1
-MOV rdx, 2
-syscall
-MOV rax, 10
-MOV rbx, 10
-SUB rax, rbx
-MOV rsi, rax
-MOV rax, 1
-MOV rdi, 1
-MOV rdx, 1
-syscall
-MOV rax, 10
-MOV rbx, 10
-DIV rbx
-MOV rsi, rax
-MOV rax, 1
-MOV rdi, 1
-MOV rdx, 3
-syscall
-MOV rax, 10
-MOV rbx, 10
-AND rax, rbx
-MOV rsi, rax
-MOV rax, 1
-MOV rdi, 1
-MOV rdx, 2
-syscall
-MOV rax, 10
-MOV rbx, 10
-OR rax, rbx
-MOV rsi, rax
-MOV rax, 1
-MOV rdi, 1
-MOV rdx, 2
-syscall
-MOV rax, 10
-XOR rax, rax
-MOV rsi, rax
-MOV rax, 1
-MOV rdi, 1
-MOV rdx, 1
-syscall
-MOV rax, 10
-INC rax
-MOV rsi, rax
-MOV rax, 1
-MOV rdi, 1
-MOV rdx, 2
-syscall
-MOV rax, 10
-DEC rax
-MOV rsi, rax
-MOV rax, 1
-MOV rdi, 1
-MOV rdx, 1
-syscall
-halt
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, msg_hello
+    mov rdx, 13
+    syscall
+
+    mov rax, 10
+    mov rbx, 20
+
+    push rax
+    push rbx
+
+    pop rcx
+    pop rdx
+
+    add rcx, rdx
+
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, newline
+    mov rdx, 1
+    syscall
+
+    mov rax, 1
+    mov rdi, 1
+    mov rsi, msg_stack
+    mov rdx, 16
+    syscall
+
+    mov rax, 60
+    mov rdi, 0
+    syscall

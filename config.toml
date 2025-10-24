@@ -1,7 +1,7 @@
 [hardware]
 
-ram_size=32
+ram_size=1024
 
 [files]
 
-asmfile="asmfile.asm"
+asmfile="asmfile2.asm"
