@@ -159,6 +159,17 @@ class Cpu:
                     self.set_register_value(arg1,int(self.get_register_value(arg1))&int(self.get_register_value(arg2)))
                 case 'xor':
                     self.set_register_value(arg2,int(self.get_register_value(arg1))^int(self.get_register_value(arg2)))
+    def jump(self,label):
+        if type(label)==int:
+            print(f"RIP: {self.get_register_value("rip")}")
+            raise ValueError("A label can not be an integer.")
+        global instructions
+        i=0
+        for instruction118 in instructions:
+            if label==instruction118:
+                self.set_register_value("rip",i)
+                break
+            i+=1
         
 
 class mem:
@@ -201,43 +212,47 @@ cpu.memory=memory
 while True:
     try:
         dataline = instructions[dataptr].strip()
-        if dataline == "section .text":
-            break
-
-        if not dataline or dataline.startswith(";"):
-            dataptr += 1
-            continue
-
-        parts = dataline.split(None, 2)  
-        if len(parts) < 3:
-            dataptr += 1
-            continue
-
-        name, typeofvar, raw_data = parts
-        if typeofvar != "db":
-            dataptr += 1
-            continue
-
-        data = bytearray()
-
-        
-        tokens = [x.strip() for x in raw_data.split(",")]
-
-        for token in tokens:
-            if token.startswith('\"') and token.endswith('\"'):
-               
-                text = token.strip('"')
-                data.extend(text.encode('utf-8'))
-            elif token.isdigit():
-                data.append(int(token))
-            else:
-                raise ValueError(f"Unsupported db value: {token}")
-
-        memory.add_data_to_data_section(name, data, len(data))
-        dataptr += 1
-    except Exception as e:
-        print("DATA ERROR:", e)
+    except:
         break
+    else:
+        try:
+            if dataline == "section .text":
+                break
+
+            if not dataline or dataline.startswith(";"):
+                dataptr += 1
+                continue
+
+            parts = dataline.split(None, 2)  
+            if len(parts) < 3:
+                dataptr += 1
+                continue
+
+            name, typeofvar, raw_data = parts
+            if typeofvar != "db":
+                dataptr += 1
+                continue
+
+            data = bytearray()
+
+            
+            tokens = [x.strip() for x in raw_data.split(",")]
+
+            for token in tokens:
+                if token.startswith('\"') and token.endswith('\"'):
+                
+                    text = token.strip('"')
+                    data.extend(text.encode('utf-8'))
+                elif token.isdigit():
+                    data.append(int(token))
+                else:
+                    raise ValueError(f"Unsupported db value: {token}")
+
+            memory.add_data_to_data_section(name, data, len(data))
+            dataptr += 1
+        except Exception as e:
+            print("DATA ERROR:", e)
+            break
 
 
 while cpu.instructionPointer<len(instructions):
@@ -286,7 +301,12 @@ while cpu.instructionPointer<len(instructions):
                     if instruction314 == arg2:
                         break
                     i += 1
-                cpu.set_register_value(arg1, i)                
+                cpu.set_register_value(arg1, i)  
+        case "jmp":
+            try:
+                cpu.jump(cpu.get_register_value(arg1))  
+            except:
+                raise            
         case "syscall":  
             
             rax= cpu.get_register_value("rax") if isinstance(cpu.get_register_value("rax"),int) else ord(cpu.get_register_value("rax"))
