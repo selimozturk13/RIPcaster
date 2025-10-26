@@ -81,6 +81,10 @@ class Cpu:
             "rsp":0
         }
         self.zeroFlag=0
+        self.signFlag = 0
+        self.carryFlag = 0
+        self.overflowFlag = 0
+        self.parityFlag=0
 
     def set_register_value(self,registerid,value):
         if str(registerid) in self.registers:
@@ -308,7 +312,109 @@ while cpu.instructionPointer<len(instructions):
             except:
                 raise  
         case "cmp":
-            ...         
+            arg1=int(cpu.get_register_value(arg1))
+            arg2=int(cpu.get_register_value(arg2))
+            result=arg1-arg2
+            cpu.zeroFlag=int(result==0)
+            cpu.signFlag=int(result<0)
+            cpu.carryFlag=int((arg1 & 0xFFFFFFFFFFFFFFFF) < (arg2 & 0xFFFFFFFFFFFFFFFF))
+            cpu.overflowFlag=int(result>127 or result<-127)
+        case "je" | "jz": 
+            if cpu.zeroFlag==1:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))  
+                except:
+                    raise 
+        case "jne" | "jnz":
+            if cpu.zeroFlag!=1:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))  
+                except:
+                    raise 
+        case "jg" | "jnle":
+            if cpu.signFlag==cpu.overflowFlag or cpu.zeroFlag==0:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))  
+                except:
+                    raise 
+        case "jge" | "jnl":
+            if cpu.signFlag==cpu.overflowFlag:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))  
+                except:
+                    raise 
+        case "jl" | "jnge":
+            if cpu.signFlag!=cpu.overflowFlag:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))  
+                except:
+                    raise 
+        case "jle" | "jng":
+            if cpu.signFlag!=cpu.overflowFlag or cpu.zeroFlag==1:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))  
+                except:
+                    raise 
+        case "ja" | "jnbe":
+            if cpu.carryFlag == 0 and cpu.zeroFlag == 0:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))
+                except:
+                    raise
+        case "jae" | "jnb":
+            if cpu.carryFlag == 0:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))
+                except:
+                    raise
+        case "jb" | "jnae":
+            if cpu.carryFlag == 1:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))
+                except:
+                    raise
+        case "jbe" | "jna":
+            if cpu.carryFlag == 1 or cpu.zeroFlag == 1:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))
+                except:
+                    raise
+        case "jo":
+            if cpu.overflowFlag == 1:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))
+                except:
+                    raise
+        case "jno":
+            if cpu.overflowFlag == 0:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))
+                except:
+                    raise
+        case "js":
+            if cpu.signFlag == 1:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))
+                except:
+                    raise
+        case "jns":
+            if cpu.signFlag == 0:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))
+                except:
+                    raise
+        case "jp" | "jpe":
+            if cpu.parityFlag == 1:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))
+                except:
+                    raise
+        case "jnp" | "jpo":
+            if cpu.parityFlag == 0:
+                try:
+                    cpu.jump(cpu.get_register_value(arg1))
+                except:
+                    raise
         case "syscall":  
             
             rax= cpu.get_register_value("rax") if isinstance(cpu.get_register_value("rax"),int) else ord(cpu.get_register_value("rax"))
@@ -330,4 +436,4 @@ while cpu.instructionPointer<len(instructions):
         case "halt":
             break
     cpu.instructionPointer+=1   
-print("Registers", cpu.registers)
+
