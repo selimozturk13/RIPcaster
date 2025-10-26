@@ -261,7 +261,7 @@ while cpu.instructionPointer<len(instructions):
     instruction=instruction_parts[0].lower() if len(instruction_parts)>=1 else None
     arg1=instruction_parts[1].lower() if len(instruction_parts)>1 else None
     arg2=instruction_parts[2].lower() if len(instruction_parts)>2 else None
-    
+
     match instruction:
      
         case "add":
@@ -306,7 +306,9 @@ while cpu.instructionPointer<len(instructions):
             try:
                 cpu.jump(cpu.get_register_value(arg1))  
             except:
-                raise            
+                raise  
+        case "cmp":
+            ...         
         case "syscall":  
             
             rax= cpu.get_register_value("rax") if isinstance(cpu.get_register_value("rax"),int) else ord(cpu.get_register_value("rax"))
@@ -318,9 +320,13 @@ while cpu.instructionPointer<len(instructions):
                     for i in range(length):
                         sys.stdout.write(chr(memory.get_memory(buf + i)))
                     sys.stdout.flush()
+                if fd == 2:
+                    for i in range(length):
+                        sys.stderr.write(chr(memory.get_memory(buf + i)))
+                    sys.stderr.flush()
                 
             if rax==60:
-                os._exit(cpu.get_register_value("rdi"))
+                sys.exit(cpu.get_register_value("rdi"))
         case "halt":
             break
     cpu.instructionPointer+=1   

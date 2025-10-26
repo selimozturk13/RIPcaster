@@ -8,13 +8,11 @@ mov rax, 10
 mov rbx, 5
 add rax, rbx
 sub rax, 3
-imul rax, 2
 xor rcx, rcx
 or rcx, rax
 and rcx, 15
 inc rcx
 dec rcx
-neg rcx
 lea rdx, [rax + 4]
 push rax
 push rdx
