@@ -39,6 +39,7 @@ class Memory:
         else:
             self.hp+=rdi
             self.cpu.registers[rax]=self.hp
+
     def get_memory(self,addr):
         if isinstance(addr, str):
             try:
@@ -60,6 +61,7 @@ class Memory:
             if isinstance(data, str):
                 data = data.encode('utf-8')
             self.memory[pointer:pointer+lent] = data
+            self.hp+=lent
             self.datasection[name] = [pointer, lent]
         except Exception as e:
             print("Data adding error:", e)
@@ -90,8 +92,9 @@ class Cpu:
         if str(registerid) in self.registers:
             self.registers[registerid]=value
         elif '[' in str(registerid) and ']' in str(registerid):
+            
             registerid=registerid.replace('[','').replace(']','')
-            self.memory.memory[registerid]=value
+            self.memory.memory[registerid]=value.encode() if isinstance(value,str) else value
         elif '\'' in registerid and '\'' in registerid:
             self.memory.memory[registerid]=ord(value)
     
@@ -205,6 +208,8 @@ for line in instructions:
         inspoint=i
     if line=="section .data":
         dataptr=i
+    if line=="section .bss":
+        bssptr=i
     i+=1
 
 
@@ -220,7 +225,7 @@ while True:
         break
     else:
         try:
-            if dataline == "section .text":
+            if dataline == "section .text" or dataline=="section .bss":
                 break
 
             if not dataline or dataline.startswith(";"):
@@ -258,6 +263,31 @@ while True:
             print("DATA ERROR:", e)
             break
 
+while True:
+ 
+    try:
+        bssline=instructions[bssptr].strip()
+    except:
+        break
+    else:
+        #name size times
+        if bssline=="section .data" or bssline=="section .text":
+            break
+        if not bssline or bssline.startswith(";"):
+            bssptr+=1
+            continue
+        bssline=bssline.split()
+        if len(bssline)<3:
+            bssptr+=1
+            continue
+        name=bssline[0]
+        size=bssline[1]
+        times=bssline[2]
+        if size!="resq":
+            bssptr+=1
+            continue
+        memory.add_data_to_data_section(name,(8*int(times))*b"\x00",8*int(times))
+        bssptr+=1
 
 while cpu.instructionPointer<len(instructions):
     instruction_line=instructions[cpu.instructionPointer].replace(",","")
@@ -265,7 +295,7 @@ while cpu.instructionPointer<len(instructions):
     instruction=instruction_parts[0].lower() if len(instruction_parts)>=1 else None
     arg1=instruction_parts[1].lower() if len(instruction_parts)>1 else None
     arg2=instruction_parts[2].lower() if len(instruction_parts)>2 else None
-
+   
     match instruction:
      
         case "add":
@@ -418,6 +448,7 @@ while cpu.instructionPointer<len(instructions):
         case "syscall":  
             
             rax= cpu.get_register_value("rax") if isinstance(cpu.get_register_value("rax"),int) else ord(cpu.get_register_value("rax"))
+            #write syscall
             if rax == 1:
                 fd = cpu.get_register_value("rdi")
                 buf = cpu.get_register_value("rsi")
@@ -430,7 +461,17 @@ while cpu.instructionPointer<len(instructions):
                     for i in range(length):
                         sys.stderr.write(chr(memory.get_memory(buf + i)))
                     sys.stderr.flush()
-                
+            
+            #get input syscall
+            if rax==0:
+                fd=cpu.get_register_value("rdi")
+                if fd==0:
+                    buf=cpu.get_register_value("rsi")
+                    maxsize=cpu.get_register_value("rdx")
+                    user_input=sys.stdin.readline(maxsize)
+                    memory.memory[int(buf):int(buf)+len(user_input)] = user_input.encode()
+                    cpu.set_register_value("rax",len(user_input))
+            #exit syscall 
             if rax==60:
                 sys.exit(cpu.get_register_value("rdi"))
         case "halt":

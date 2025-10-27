@@ -4,4 +4,4 @@ ram_size=2048
 
 [files]
 
-asmfile="conditionaljumptest.asm"
+asmfile="full_test.asm"
