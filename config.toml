@@ -1,7 +1,7 @@
 [hardware]
 
-ram_size=2048
+ram_size=
 
 [files]
 
-asmfile="loop_test.asm"
+asmfile=" "
