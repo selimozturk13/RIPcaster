@@ -1,4 +1,4 @@
-# RIPcaster CPU Emulator
+# RIPcaster CPU Emulator v1.0.0
 
 ## Usage
 To use **RIPcaster**:
