@@ -4,4 +4,4 @@ ram_size=2048
 
 [files]
 
-asmfile="full_test.asm"
+asmfile="loop_test.asm"

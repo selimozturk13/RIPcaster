@@ -80,7 +80,8 @@ class Cpu:
             "rsi":0,
             "rdi":0,
             "rbp":0,
-            "rsp":0
+            "rsp":0,
+            "rip":0
         }
         self.zeroFlag=0
         self.signFlag = 0
@@ -171,8 +172,10 @@ class Cpu:
             print(f"RIP: {self.get_register_value("rip")}")
             raise ValueError("A label can not be an integer.")
         global instructions
-        i=0
-        for instruction118 in instructions:
+        global inspoint
+        i=inspoint
+        for count in range(i,len(instructions)):
+            instruction118=instructions[count].strip().rstrip(':').strip()
             if label==instruction118:
                 self.set_register_value("rip",i)
                 break
@@ -290,14 +293,14 @@ while True:
         bssptr+=1
 
 while cpu.instructionPointer<len(instructions):
-    instruction_line=instructions[cpu.instructionPointer].replace(",","")
+    instruction_line=instructions[cpu.get_register_value("rip")].replace(",","")
     instruction_parts=instruction_line.split()
     instruction=instruction_parts[0].lower() if len(instruction_parts)>=1 else None
     arg1=instruction_parts[1].lower() if len(instruction_parts)>1 else None
     arg2=instruction_parts[2].lower() if len(instruction_parts)>2 else None
-   
+    
     match instruction:
-     
+        
         case "add":
             cpu.ALU_Unit("+",arg1,arg2)   
         case "sub":
@@ -476,5 +479,5 @@ while cpu.instructionPointer<len(instructions):
                 sys.exit(cpu.get_register_value("rdi"))
         case "halt":
             break
-    cpu.instructionPointer+=1   
+    cpu.set_register_value("rip",cpu.get_register_value("rip")+1)
 
